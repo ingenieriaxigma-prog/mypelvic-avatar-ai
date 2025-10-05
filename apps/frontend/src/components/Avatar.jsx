@@ -10,7 +10,7 @@ import visemesMapping from "../constants/visemesMapping";
 import morphTargets from "../constants/morphTargets";
 
 export function Avatar(props) {
-  const { nodes, materials, scene } = useGLTF("/models/avatar.glb");
+  const { nodes, materials, scene } = useGLTF("/models/avatar-female.glb");
   const { animations } = useGLTF("/models/animations.glb");
   const { message, onMessagePlayed } = useSpeech();
   const [lipsync, setLipsync] = useState();
