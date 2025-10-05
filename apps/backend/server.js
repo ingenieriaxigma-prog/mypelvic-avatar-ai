@@ -5,6 +5,8 @@ import { openAIChain, parser } from "./modules/openAI.mjs";
 import { lipSync } from "./modules/lip-sync.mjs";
 import { sendDefaultMessages, defaultResponse } from "./modules/defaultMessages.mjs";
 import { convertAudioToText } from "./modules/whisper.mjs";
+import * as voice from "./modules/voice.mjs";
+
 
 dotenv.config();
 
@@ -55,7 +57,15 @@ app.post("/sts", async (req, res) => {
   openAImessages = await lipSync({ messages: openAImessages.messages });
   res.send({ messages: openAImessages });
 });
-
+app.get("/test", async (req, res) => {
+  const openaiStatus = process.env.OPENAI_API_KEY ? "✅ Cargada" : "❌ Faltante";
+  const elevenStatus = process.env.ELEVEN_LABS_API_KEY ? "✅ Cargada" : "❌ Faltante";
+  res.send({
+    message: "Estado de las integraciones",
+    OpenAI: openaiStatus,
+    ElevenLabs: elevenStatus,
+  });
+});
 app.listen(port, () => {
   console.log(`Jack are listening on port ${port}`);
 });

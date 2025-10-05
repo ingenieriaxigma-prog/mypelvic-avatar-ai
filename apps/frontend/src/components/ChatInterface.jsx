@@ -19,9 +19,9 @@ export const ChatInterface = ({ hidden, ...props }) => {
   return (
     <div className="fixed top-0 left-0 right-0 bottom-0 z-10 flex justify-between p-4 flex-col pointer-events-none">
       <div className="self-start backdrop-blur-md bg-white bg-opacity-50 p-4 rounded-lg">
-        <h1 className="font-black text-xl text-gray-700">Digital Human</h1>
+        <h1 className="font-black text-xl text-gray-700">Avatar MyPelvic</h1>
         <p className="text-gray-600">
-          {loading ? "Loading..." : "Type a message and press enter to chat with the AI."}
+          {loading ? "Loading..." : "Escribe un mensaje y pulsa enter para hablar con Liz."}
         </p>
       </div>
       <div className="w-full flex flex-col items-end justify-center gap-4"></div>
@@ -50,7 +50,7 @@ export const ChatInterface = ({ hidden, ...props }) => {
 
         <input
           className="w-full placeholder:text-gray-800 placeholder:italic p-4 rounded-md bg-opacity-50 bg-white backdrop-blur-md"
-          placeholder="Type a message..."
+          placeholder="Escribe un mensaje..."
           ref={input}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -65,7 +65,7 @@ export const ChatInterface = ({ hidden, ...props }) => {
             loading || message ? "cursor-not-allowed opacity-30" : ""
           }`}
         >
-          Send
+          Enviar
         </button>
       </div>
     </div>
