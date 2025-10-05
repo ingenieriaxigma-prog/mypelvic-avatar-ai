@@ -1,4 +1,4 @@
-import { useAnimations, useGLTF } from "@react-three/drei";
+import { Html, useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { button, useControls } from "leva";
 import React, { useEffect, useRef, useState } from "react";
@@ -9,8 +9,13 @@ import facialExpressions from "../constants/facialExpressions";
 import visemesMapping from "../constants/visemesMapping";
 import morphTargets from "../constants/morphTargets";
 
+const MODEL_PATH = "/models/avatar-female.glb";
+
 export function Avatar(props) {
-  const { nodes, materials, scene } = useGLTF("/models/avatar-female.glb");
+  const gltf = useGLTF(MODEL_PATH);
+  const nodes = gltf?.nodes ?? {};
+  const materials = gltf?.materials ?? {};
+  const scene = gltf?.scene;
   const { animations } = useGLTF("/models/animations.glb");
   const { message, onMessagePlayed } = useSpeech();
   const [lipsync, setLipsync] = useState();
@@ -32,6 +37,8 @@ export function Avatar(props) {
 
 
   const group = useRef();
+  const warningsRef = useRef({ nodes: new Set(), materials: new Set(), morphTargets: new Set() });
+  const renderableWarningRef = useRef(false);
   const { actions, mixer } = useAnimations(animations, group);
   const [animation, setAnimation] = useState(animations.find((a) => a.name === "Idle") ? "Idle" : animations[0].name);
   useEffect(() => {
@@ -48,11 +55,46 @@ export function Avatar(props) {
     }
   }, [animation]);
 
+  const safeLogWarning = (type, value, message) => {
+    const cache = warningsRef.current[type];
+    if (!cache.has(value)) {
+      console.warn(message);
+      cache.add(value);
+    }
+  };
+
+  const getNode = (name) => {
+    const node = nodes?.[name];
+    if (!node) {
+      safeLogWarning("nodes", name, `[Avatar] No se encontró el nodo "${name}" en ${MODEL_PATH}.`);
+    }
+    return node;
+  };
+
+  const getMaterial = (name) => {
+    if (!name) {
+      return undefined;
+    }
+    const material = materials?.[name];
+    if (!material) {
+      safeLogWarning("materials", name, `[Avatar] No se encontró el material "${name}" en ${MODEL_PATH}.`);
+    }
+    return material;
+  };
+
   const lerpMorphTarget = (target, value, speed = 0.1) => {
+    if (!scene) {
+      return;
+    }
     scene.traverse((child) => {
       if (child.isSkinnedMesh && child.morphTargetDictionary) {
         const index = child.morphTargetDictionary[target];
         if (index === undefined || child.morphTargetInfluences[index] === undefined) {
+          safeLogWarning(
+            "morphTargets",
+            target,
+            `[Avatar] El morph target "${target}" no existe en el modelo. Se usará el valor predeterminado.`
+          );
           return;
         }
         child.morphTargetInfluences[index] = THREE.MathUtils.lerp(child.morphTargetInfluences[index], value, speed);
@@ -60,11 +102,12 @@ export function Avatar(props) {
     });
   };
 
-  const [blink, setBlink] = useState(false);
+  const [blinkTarget, setBlinkTarget] = useState(0);
+  const blinkStrength = useRef(0);
   const [facialExpression, setFacialExpression] = useState("");
   const [audio, setAudio] = useState();
 
-  useFrame(() => {
+  useFrame((state) => {
     !setupMode &&
       morphTargets.forEach((key) => {
         const mapping = facialExpressions[facialExpression];
@@ -78,8 +121,20 @@ export function Avatar(props) {
         }
       });
 
-    lerpMorphTarget("eyeBlinkLeft", blink ? 1 : 0, 0.5);
-    lerpMorphTarget("eyeBlinkRight", blink ? 1 : 0, 0.5);
+    blinkStrength.current = THREE.MathUtils.lerp(blinkStrength.current, blinkTarget, 0.2);
+    lerpMorphTarget("eyeBlinkLeft", blinkStrength.current, 0.2);
+    lerpMorphTarget("eyeBlinkRight", blinkStrength.current, 0.2);
+
+    if (!setupMode) {
+      const smileIntensity = ((Math.sin(state.clock.getElapsedTime() * 0.6) + 1) / 2) * 0.08;
+      ["mouthSmileLeft", "mouthSmileRight"].forEach((key) => {
+        const mapping = facialExpressions[facialExpression];
+        if (mapping && mapping[key] !== undefined) {
+          return;
+        }
+        lerpMorphTarget(key, smileIntensity, 0.05);
+      });
+    }
 
     if (setupMode) {
       return;
@@ -159,86 +214,93 @@ export function Avatar(props) {
 
   useEffect(() => {
     let blinkTimeout;
+    let resetTimeout;
     const nextBlink = () => {
       blinkTimeout = setTimeout(() => {
-        setBlink(true);
-        setTimeout(() => {
-          setBlink(false);
+        setBlinkTarget(1);
+        resetTimeout = setTimeout(() => {
+          setBlinkTarget(0);
           nextBlink();
-        }, 200);
-      }, THREE.MathUtils.randInt(1000, 5000));
+        }, 140);
+      }, THREE.MathUtils.randInt(1800, 4200));
     };
     nextBlink();
-    return () => clearTimeout(blinkTimeout);
+    return () => {
+      clearTimeout(blinkTimeout);
+      clearTimeout(resetTimeout);
+    };
   }, []);
+
+  const hasRenderableMeshes = React.useMemo(() => {
+    const nodeValues = Object.values(nodes ?? {});
+    if (!nodeValues.length || !scene) {
+      return false;
+    }
+    const hasSkinnedMesh = nodeValues.some((node) => node?.isSkinnedMesh || node?.type === "SkinnedMesh");
+    return Boolean(nodes?.Hips && hasSkinnedMesh);
+  }, [nodes, scene]);
+
+  useEffect(() => {
+    if (!hasRenderableMeshes && scene && !renderableWarningRef.current) {
+      console.warn(`[Avatar] No se encontraron mallas renderizables en ${MODEL_PATH}.`);
+      renderableWarningRef.current = true;
+    }
+  }, [hasRenderableMeshes, scene]);
+
+  const renderSkinnedMesh = (nodeName, materialName) => {
+    const node = getNode(nodeName);
+    if (!node) {
+      return null;
+    }
+    const material = getMaterial(materialName) ?? node.material ?? undefined;
+    return (
+      <skinnedMesh
+        key={nodeName}
+        name={nodeName}
+        geometry={node.geometry}
+        material={material}
+        skeleton={node.skeleton}
+        morphTargetDictionary={node.morphTargetDictionary}
+        morphTargetInfluences={node.morphTargetInfluences}
+      />
+    );
+  };
+
+  const hipsNode = getNode("Hips");
 
   return (
     <group {...props} dispose={null} ref={group} position={[0, -0.5, 0]}>
-      <primitive object={nodes.Hips} />
-      <skinnedMesh
-        name="EyeLeft"
-        geometry={nodes.EyeLeft.geometry}
-        material={materials.Wolf3D_Eye}
-        skeleton={nodes.EyeLeft.skeleton}
-        morphTargetDictionary={nodes.EyeLeft.morphTargetDictionary}
-        morphTargetInfluences={nodes.EyeLeft.morphTargetInfluences}
-      />
-      <skinnedMesh
-        name="EyeRight"
-        geometry={nodes.EyeRight.geometry}
-        material={materials.Wolf3D_Eye}
-        skeleton={nodes.EyeRight.skeleton}
-        morphTargetDictionary={nodes.EyeRight.morphTargetDictionary}
-        morphTargetInfluences={nodes.EyeRight.morphTargetInfluences}
-      />
-      <skinnedMesh
-        name="Wolf3D_Head"
-        geometry={nodes.Wolf3D_Head.geometry}
-        material={materials.Wolf3D_Skin}
-        skeleton={nodes.Wolf3D_Head.skeleton}
-        morphTargetDictionary={nodes.Wolf3D_Head.morphTargetDictionary}
-        morphTargetInfluences={nodes.Wolf3D_Head.morphTargetInfluences}
-      />
-      <skinnedMesh
-        name="Wolf3D_Teeth"
-        geometry={nodes.Wolf3D_Teeth.geometry}
-        material={materials.Wolf3D_Teeth}
-        skeleton={nodes.Wolf3D_Teeth.skeleton}
-        morphTargetDictionary={nodes.Wolf3D_Teeth.morphTargetDictionary}
-        morphTargetInfluences={nodes.Wolf3D_Teeth.morphTargetInfluences}
-      />
-      <skinnedMesh
-        geometry={nodes.Wolf3D_Glasses.geometry}
-        material={materials.Wolf3D_Glasses}
-        skeleton={nodes.Wolf3D_Glasses.skeleton}
-      />
-      <skinnedMesh
-        geometry={nodes.Wolf3D_Headwear.geometry}
-        material={materials.Wolf3D_Headwear}
-        skeleton={nodes.Wolf3D_Headwear.skeleton}
-      />
-      <skinnedMesh
-        geometry={nodes.Wolf3D_Body.geometry}
-        material={materials.Wolf3D_Body}
-        skeleton={nodes.Wolf3D_Body.skeleton}
-      />
-      <skinnedMesh
-        geometry={nodes.Wolf3D_Outfit_Bottom.geometry}
-        material={materials.Wolf3D_Outfit_Bottom}
-        skeleton={nodes.Wolf3D_Outfit_Bottom.skeleton}
-      />
-      <skinnedMesh
-        geometry={nodes.Wolf3D_Outfit_Footwear.geometry}
-        material={materials.Wolf3D_Outfit_Footwear}
-        skeleton={nodes.Wolf3D_Outfit_Footwear.skeleton}
-      />
-      <skinnedMesh
-        geometry={nodes.Wolf3D_Outfit_Top.geometry}
-        material={materials.Wolf3D_Outfit_Top}
-        skeleton={nodes.Wolf3D_Outfit_Top.skeleton}
-      />
+      {!hasRenderableMeshes && (
+        <Html center>
+          <div
+            style={{
+              backgroundColor: "rgba(0, 0, 0, 0.7)",
+              color: "#ffffff",
+              padding: "1rem 1.5rem",
+              borderRadius: "0.75rem",
+              maxWidth: "18rem",
+              fontSize: "1rem",
+              textAlign: "center",
+              boxShadow: "0 0 20px rgba(0, 0, 0, 0.35)",
+            }}
+          >
+            No se pudo cargar el avatar. Revisa la consola para más detalles.
+          </div>
+        </Html>
+      )}
+      {hipsNode ? <primitive object={hipsNode} /> : null}
+      {renderSkinnedMesh("EyeLeft", "Wolf3D_Eye")}
+      {renderSkinnedMesh("EyeRight", "Wolf3D_Eye")}
+      {renderSkinnedMesh("Wolf3D_Head", "Wolf3D_Skin")}
+      {renderSkinnedMesh("Wolf3D_Teeth", "Wolf3D_Teeth")}
+      {renderSkinnedMesh("Wolf3D_Glasses", "Wolf3D_Glasses")}
+      {renderSkinnedMesh("Wolf3D_Headwear", "Wolf3D_Headwear")}
+      {renderSkinnedMesh("Wolf3D_Body", "Wolf3D_Body")}
+      {renderSkinnedMesh("Wolf3D_Outfit_Bottom", "Wolf3D_Outfit_Bottom")}
+      {renderSkinnedMesh("Wolf3D_Outfit_Footwear", "Wolf3D_Outfit_Footwear")}
+      {renderSkinnedMesh("Wolf3D_Outfit_Top", "Wolf3D_Outfit_Top")}
     </group>
   );
 }
 
-useGLTF.preload("/models/avatar.glb");
+useGLTF.preload(MODEL_PATH);
