@@ -293,6 +293,9 @@ export function Avatar(props) {
       {renderSkinnedMesh("EyeRight", "Wolf3D_Eye")}
       {renderSkinnedMesh("Wolf3D_Head", "Wolf3D_Skin")}
       {renderSkinnedMesh("Wolf3D_Teeth", "Wolf3D_Teeth")}
+      {renderSkinnedMesh("Wolf3D_Eyelashes", "Wolf3D_Eyelash")}
+      {renderSkinnedMesh("Wolf3D_Eyebrows", "Wolf3D_Eyebrow")}
+      {renderSkinnedMesh("Wolf3D_Hair", "Wolf3D_Hair")}
       {renderSkinnedMesh("Wolf3D_Glasses", "Wolf3D_Glasses")}
       {renderSkinnedMesh("Wolf3D_Headwear", "Wolf3D_Headwear")}
       {renderSkinnedMesh("Wolf3D_Body", "Wolf3D_Body")}
