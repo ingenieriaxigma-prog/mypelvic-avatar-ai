@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 
 const backendUrl = "http://localhost:3000";
 
@@ -11,6 +11,11 @@ export const SpeechProvider = ({ children }) => {
   const [message, setMessage] = useState();
   const [loading, setLoading] = useState(false);
   const [currentAudio, setCurrentAudio] = useState(null);
+  const [voiceStatus, setVoiceStatus] = useState("idle");
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  const [playbackError, setPlaybackError] = useState(null);
+
+  const blockedAudioRef = useRef(null);
 
   let chunks = [];
 
@@ -123,6 +128,10 @@ export const SpeechProvider = ({ children }) => {
   const onMessagePlayed = useCallback(() => {
     setMessages((messages) => messages.slice(1));
     setCurrentAudio(null);
+    setVoiceStatus("idle");
+    setAutoplayBlocked(false);
+    setPlaybackError(null);
+    blockedAudioRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -136,6 +145,9 @@ export const SpeechProvider = ({ children }) => {
   useEffect(() => {
     if (!message) {
       setCurrentAudio(null);
+      setVoiceStatus("idle");
+      setAutoplayBlocked(false);
+      setPlaybackError(null);
       return;
     }
 
@@ -147,9 +159,14 @@ export const SpeechProvider = ({ children }) => {
       return;
     }
 
-    console.log(`[Frontend] Reproduciendo audio desde ${audioUrl}`);
+    console.log("🎧 Playing audio:", audioUrl);
+    setVoiceStatus("loading");
+    setAutoplayBlocked(false);
+    setPlaybackError(null);
+
     const audio = new Audio(audioUrl);
     audio.crossOrigin = "anonymous";
+    audio.autoplay = true;
 
     const handleEnded = () => {
       console.log(`[Frontend] Reproducción finalizada para ${audioUrl}`);
@@ -164,17 +181,29 @@ export const SpeechProvider = ({ children }) => {
     audio.addEventListener("ended", handleEnded);
     audio.addEventListener("error", handleError);
 
-    const playPromise = audio.play();
-    if (playPromise && typeof playPromise.catch === "function") {
-      playPromise
-        .then(() => console.log(`[Frontend] Audio en reproducción: ${audioUrl}`))
-        .catch((error) => {
-          console.error(`[Frontend] Falló la reproducción para ${audioUrl}`, error);
+    const startPlayback = async () => {
+      try {
+        await audio.play();
+        console.log("✅ Playback started");
+        setVoiceStatus("playing");
+        setAutoplayBlocked(false);
+        blockedAudioRef.current = null;
+      } catch (error) {
+        console.error("⚠️ Playback error:", error);
+        setVoiceStatus("error");
+        setPlaybackError(error);
+        const isAutoplayBlock =
+          error?.name === "NotAllowedError" || error?.message?.toLowerCase().includes("gesture");
+        if (isAutoplayBlock) {
+          setAutoplayBlocked(true);
+          blockedAudioRef.current = audio;
+        } else {
           onMessagePlayed();
-        });
-    } else {
-      console.log(`[Frontend] Audio en reproducción: ${audioUrl}`);
-    }
+        }
+      }
+    };
+
+    startPlayback();
 
     setCurrentAudio(audio);
 
@@ -183,8 +212,30 @@ export const SpeechProvider = ({ children }) => {
       audio.removeEventListener("ended", handleEnded);
       audio.removeEventListener("error", handleError);
       audio.pause();
+      if (blockedAudioRef.current === audio) {
+        blockedAudioRef.current = null;
+      }
     };
   }, [message, onMessagePlayed]);
+
+  const resumePlayback = useCallback(async () => {
+    const audio = blockedAudioRef.current;
+    if (!audio) {
+      return;
+    }
+    try {
+      console.log("[Frontend] Reintentando reproducción manual");
+      await audio.play();
+      console.log("✅ Playback started");
+      setVoiceStatus("playing");
+      setAutoplayBlocked(false);
+      setPlaybackError(null);
+      blockedAudioRef.current = null;
+    } catch (error) {
+      console.error("⚠️ Playback error:", error);
+      setPlaybackError(error);
+    }
+  }, []);
 
   return (
     <SpeechContext.Provider
@@ -197,6 +248,10 @@ export const SpeechProvider = ({ children }) => {
         onMessagePlayed,
         loading,
         currentAudio,
+        voiceStatus,
+        autoplayBlocked,
+        playbackError,
+        resumePlayback,
       }}
     >
       {children}

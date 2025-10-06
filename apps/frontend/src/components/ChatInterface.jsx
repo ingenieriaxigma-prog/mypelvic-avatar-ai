@@ -3,7 +3,18 @@ import { useSpeech } from "../hooks/useSpeech";
 
 export const ChatInterface = ({ hidden, ...props }) => {
   const input = useRef();
-  const { tts, loading, message, startRecording, stopRecording, recording } = useSpeech();
+  const {
+    tts,
+    loading,
+    message,
+    startRecording,
+    stopRecording,
+    recording,
+    autoplayBlocked,
+    resumePlayback,
+    playbackError,
+    voiceStatus,
+  } = useSpeech();
 
   const sendMessage = () => {
     const text = input.current.value;
@@ -18,11 +29,38 @@ export const ChatInterface = ({ hidden, ...props }) => {
 
   return (
     <div className="fixed top-0 left-0 right-0 bottom-0 z-10 flex justify-between p-4 flex-col pointer-events-none">
-      <div className="self-start backdrop-blur-md bg-white bg-opacity-50 p-4 rounded-lg">
+      <div className="self-start backdrop-blur-md bg-white bg-opacity-50 p-4 rounded-lg pointer-events-auto">
         <h1 className="font-black text-xl text-gray-700">Avatar MyPelvic</h1>
         <p className="text-gray-600">
-          {loading ? "Loading..." : "Escribe un mensaje y pulsa enter para hablar con Liz."}
+          {loading || voiceStatus === "loading"
+            ? "Loading voice…"
+            : autoplayBlocked
+            ? "El navegador bloqueó la reproducción automática. Pulsa Play para escuchar la respuesta."
+            : "Escribe un mensaje y pulsa enter para hablar con Liz."}
         </p>
+        {playbackError && !autoplayBlocked ? (
+          <p className="mt-2 text-sm text-red-600">
+            No se pudo reproducir el audio automáticamente. Intenta enviar tu mensaje nuevamente.
+          </p>
+        ) : null}
+        {autoplayBlocked ? (
+          <button
+            onClick={resumePlayback}
+            className="mt-3 inline-flex items-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="h-4 w-4"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.25v13.5l13.5-6.75-13.5-6.75Z" />
+            </svg>
+            Reproducir respuesta
+          </button>
+        ) : null}
       </div>
       <div className="w-full flex flex-col items-end justify-center gap-4"></div>
       <div className="flex items-center gap-2 pointer-events-auto max-w-screen-sm w-full mx-auto">
