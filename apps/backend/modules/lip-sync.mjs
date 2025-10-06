@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+dotenv.config({ path: "./apps/backend/.env" });
 import { convertTextToSpeech } from "./elevenLabs.mjs";
 import { getPhonemes } from "./rhubarbLipSync.mjs";
 import { readJsonTranscript, audioFileToBase64 } from "../utils/files.mjs";
@@ -14,6 +16,7 @@ const lipSync = async ({ messages }) => {
 
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
+          console.log("🎤 Generando con voz:", process.env.ELEVEN_LABS_VOICE_ID);
           await convertTextToSpeech({ text: message.text, fileName });
           await delay(RETRY_DELAY);
           break;

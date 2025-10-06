@@ -7,8 +7,11 @@ import { sendDefaultMessages, defaultResponse } from "./modules/defaultMessages.
 import { convertAudioToText } from "./modules/whisper.mjs";
 import * as voice from "./modules/voice.mjs";
 
+dotenv.config({ path: "./.env" });
 
-dotenv.config();
+console.log("🔑 OPENAI:", process.env.OPENAI_API_KEY ? "✅" : "❌");
+console.log("🔊 ELEVENLABS:", process.env.ELEVEN_LABS_API_KEY ? "✅" : "❌");
+console.log("🎙 VOICE:", process.env.ELEVEN_LABS_VOICE_ID);
 
 const elevenLabsApiKey = process.env.ELEVEN_LABS_API_KEY;
 

@@ -10,14 +10,14 @@ async function sendDefaultMessages({ userMessage }) {
   if (!userMessage) {
     messages = [
       {
-        text: "Hey there... How was your day?",
+        text: "¡Hola! Qué alegría verte.",
         audio: await audioFileToBase64({ fileName: "audios/intro_0.wav" }),
         lipsync: await readJsonTranscript({ fileName: "audios/intro_0.json" }),
         facialExpression: "smile",
         animation: "TalkingOne",
       },
       {
-        text: "I'm Jack, your personal AI assistant. I'm here to help you with anything you need.",
+        text: "Soy Liz, tu asistente virtual en salud y bienestar pélvica. Estoy aquí para acompañarte paso a paso, con empatía y claridad, en todo lo que necesites aprender sobre tu salud íntima.",
         audio: await audioFileToBase64({ fileName: "audios/intro_1.wav" }),
         lipsync: await readJsonTranscript({ fileName: "audios/intro_1.json" }),
         facialExpression: "smile",
