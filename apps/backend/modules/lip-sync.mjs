@@ -18,15 +18,19 @@ const lipSync = async ({ messages, hostUrl }) => {
   await Promise.all(
     messages.map(async (message, index) => {
       const timestamp = Date.now();
-      const fileName = message.audioFileName || `liz_${timestamp}_${index}.mp3`;
-      message.audioFileName = fileName;
-      const filePath = resolveAudioPath(fileName);
-
+      const requestedFileName = message.audioFileName || `liz_${timestamp}_${index}.mp3`;
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
-          console.log(`[ElevenLabs] Generating audio for message ${index} -> ${filePath}`);
-          await convertTextToSpeech({ text: message.text, fileName: filePath });
-          console.log(`[ElevenLabs] Audio generated at ${filePath}`);
+          const { fileName, audioUrl } = await convertTextToSpeech({
+            text: message.text,
+            fileName: requestedFileName,
+            hostUrl,
+          });
+          message.audioFileName = fileName;
+          if (audioUrl) {
+            message.audioUrl = audioUrl;
+            console.log(`[ElevenLabs] Audio público disponible en ${audioUrl}`);
+          }
           await delay(RETRY_DELAY);
           break;
         } catch (error) {
@@ -53,10 +57,9 @@ const lipSync = async ({ messages, hostUrl }) => {
 
       try {
         const transcriptPath = await getPhonemes({ sourceFilePath: filePath });
-        const publicUrl = buildAudioPublicUrl({ fileName, hostUrl });
-        message.audioUrl = publicUrl || null;
-        if (message.audioUrl) {
-          console.log(`[ElevenLabs] Audio público disponible en ${message.audioUrl}`);
+        if (!message.audioUrl) {
+          const publicUrl = buildAudioPublicUrl({ fileName, hostUrl });
+          message.audioUrl = publicUrl || null;
         }
         if (!message.audioUrl) {
           console.warn(`[Audio] Missing audio URL for message ${index}`);

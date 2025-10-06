@@ -1,5 +1,9 @@
+import { randomUUID } from "crypto";
+import path from "path";
 import ElevenLabs from "elevenlabs-node";
 import dotenv from "dotenv";
+import { buildAudioPublicUrl, resolveAudioPath } from "../utils/files.mjs";
+
 dotenv.config();
 
 const DEFAULT_FEMALE_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Clara - Spanish
@@ -14,10 +18,14 @@ const voice = new ElevenLabs({
   voiceId: voiceID,
 });
 
-async function convertTextToSpeech({ text, fileName }) {
-  console.log(`[ElevenLabs] Solicitud de síntesis para ${fileName}`);
+async function convertTextToSpeech({ text, fileName, hostUrl }) {
+  const resolvedFileName = fileName ? path.basename(fileName) : `${randomUUID()}.mp3`;
+  const filePath = resolveAudioPath(resolvedFileName);
+
+  console.log(`[ElevenLabs] Solicitud de síntesis para ${filePath}`);
   await voice.textToSpeech({
-    fileName: fileName,
+    fileName: filePath,
+    text,
     textInput: text,
     voiceId: voiceID,
     stability: 0.5,
@@ -26,7 +34,16 @@ async function convertTextToSpeech({ text, fileName }) {
     style: 0.2,
     speakerBoost: true,
   });
-  console.log(`[ElevenLabs] Síntesis completada para ${fileName}`);
+
+  const fallbackHost = (hostUrl || process.env.HOST_URL || "http://localhost:3000").replace(/\/$/, "");
+  const audioUrl = buildAudioPublicUrl({ fileName: resolvedFileName, hostUrl: fallbackHost });
+  console.log(`✅ Audio generated: ${audioUrl}`);
+
+  return {
+    fileName: resolvedFileName,
+    filePath,
+    audioUrl,
+  };
 }
 
 export { convertTextToSpeech, voice, DEFAULT_FEMALE_VOICE_ID, DEFAULT_MODEL_ID };
