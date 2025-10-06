@@ -17,9 +17,10 @@ export function Avatar(props) {
   const materials = gltf?.materials ?? {};
   const scene = gltf?.scene;
   const { animations } = useGLTF("/models/animations.glb");
-  const { message, onMessagePlayed } = useSpeech();
+  const { message, currentAudio } = useSpeech();
   const [lipsync, setLipsync] = useState();
   const [setupMode, setSetupMode] = useState(false);
+  const audioRef = useRef(null);
 
   useEffect(() => {
     if (!message) {
@@ -29,11 +30,17 @@ export function Avatar(props) {
     setAnimation(message.animation);
     setFacialExpression(message.facialExpression);
     setLipsync(message.lipsync);
-    const audio = new Audio("data:audio/mp3;base64," + message.audio);
-    audio.play();
-    setAudio(audio);
-    audio.onended = onMessagePlayed;
+    if (!message.audioUrl) {
+      console.warn("[Avatar] Missing audio URL for message.", message);
+    }
   }, [message]);
+
+  useEffect(() => {
+    audioRef.current = currentAudio || null;
+    if (currentAudio && message?.audioUrl) {
+      console.log(`[Avatar] Using audio stream ${message.audioUrl}`);
+    }
+  }, [currentAudio, message]);
 
 
   const group = useRef();
@@ -105,7 +112,6 @@ export function Avatar(props) {
   const [blinkTarget, setBlinkTarget] = useState(0);
   const blinkStrength = useRef(0);
   const [facialExpression, setFacialExpression] = useState("");
-  const [audio, setAudio] = useState();
 
   useFrame((state) => {
     !setupMode &&
@@ -141,7 +147,8 @@ export function Avatar(props) {
     }
 
     const appliedMorphTargets = [];
-    if (message && lipsync) {
+    const audio = audioRef.current;
+    if (message && lipsync && audio) {
       const currentAudioTime = audio.currentTime;
       for (let i = 0; i < lipsync.mouthCues.length; i++) {
         const mouthCue = lipsync.mouthCues[i];
