@@ -15,6 +15,7 @@ const voice = new ElevenLabs({
 });
 
 async function convertTextToSpeech({ text, fileName }) {
+  console.log(`[ElevenLabs] Solicitud de síntesis para ${fileName}`);
   await voice.textToSpeech({
     fileName: fileName,
     textInput: text,
@@ -25,6 +26,7 @@ async function convertTextToSpeech({ text, fileName }) {
     style: 0.2,
     speakerBoost: true,
   });
+  console.log(`[ElevenLabs] Síntesis completada para ${fileName}`);
 }
 
 export { convertTextToSpeech, voice, DEFAULT_FEMALE_VOICE_ID, DEFAULT_MODEL_ID };

@@ -37,17 +37,18 @@ export const SpeechProvider = ({ children }) => {
           body: JSON.stringify({ audio: base64Audio }),
         });
         const response = (await data.json()).messages;
+        console.log("[Frontend] Respuesta STS recibida:", response);
         if (!Array.isArray(response) || response.length === 0) {
-          console.warn("[Speech] Received empty response from STS endpoint.");
+          console.warn("[Frontend] Respuesta vacía desde STS.");
         }
         response?.forEach((msg, index) => {
           if (!msg?.audioUrl) {
-            console.warn(`[Speech] Missing audio URL in STS response (index ${index}).`, msg);
+            console.warn(`[Frontend] Falta audioUrl en STS (índice ${index}).`, msg);
           }
         });
         setMessages((messages) => [...messages, ...(response || [])]);
       } catch (error) {
-        console.error("[Speech] Error sending STS request:", error);
+        console.error("[Frontend] Error al enviar STS:", error);
       } finally {
         setLoading(false);
       }
@@ -102,17 +103,18 @@ export const SpeechProvider = ({ children }) => {
         body: JSON.stringify({ message }),
       });
       const response = (await data.json()).messages;
+      console.log("[Frontend] Respuesta TTS recibida:", response);
       if (!Array.isArray(response) || response.length === 0) {
-        console.warn("[Speech] Received empty response from TTS endpoint.");
+        console.warn("[Frontend] Respuesta vacía desde TTS.");
       }
       response?.forEach((msg, index) => {
         if (!msg?.audioUrl) {
-          console.warn(`[Speech] Missing audio URL in TTS response (index ${index}).`, msg);
+          console.warn(`[Frontend] Falta audioUrl en TTS (índice ${index}).`, msg);
         }
       });
       setMessages((messages) => [...messages, ...(response || [])]);
     } catch (error) {
-      console.error("[Speech] Error sending TTS request:", error);
+      console.error("[Frontend] Error al enviar TTS:", error);
     } finally {
       setLoading(false);
     }
@@ -137,37 +139,25 @@ export const SpeechProvider = ({ children }) => {
       return;
     }
 
-    const buildPlayableUrl = (audioUrl) => {
-      if (!audioUrl) {
-        return null;
-      }
-      if (/^https?:\/\//i.test(audioUrl)) {
-        return audioUrl;
-      }
-      const normalizedBackendUrl = backendUrl.replace(/\/$/, "");
-      const normalizedAudioUrl = audioUrl.startsWith("/") ? audioUrl : `/${audioUrl}`;
-      return `${normalizedBackendUrl}${normalizedAudioUrl}`;
-    };
+    const { audioUrl } = message;
 
-    const playableUrl = buildPlayableUrl(message.audioUrl);
-
-    if (!playableUrl) {
-      console.warn("[Speech] No playable audio URL provided for message.", message);
+    if (!audioUrl) {
+      console.warn("[Frontend] No se proporcionó audioUrl reproducible.", message);
       onMessagePlayed();
       return;
     }
 
-    console.log(`[Speech] Preparing audio playback for ${playableUrl}`);
-    const audio = new Audio(playableUrl);
+    console.log(`[Frontend] Reproduciendo audio desde ${audioUrl}`);
+    const audio = new Audio(audioUrl);
     audio.crossOrigin = "anonymous";
 
     const handleEnded = () => {
-      console.log(`[Speech] Playback ended for ${playableUrl}`);
+      console.log(`[Frontend] Reproducción finalizada para ${audioUrl}`);
       onMessagePlayed();
     };
 
     const handleError = (event) => {
-      console.error(`[Speech] Playback error for ${playableUrl}`, event);
+      console.error(`[Frontend] Error de reproducción para ${audioUrl}`, event);
       onMessagePlayed();
     };
 
@@ -177,19 +167,19 @@ export const SpeechProvider = ({ children }) => {
     const playPromise = audio.play();
     if (playPromise && typeof playPromise.catch === "function") {
       playPromise
-        .then(() => console.log(`[Speech] Playback started for ${playableUrl}`))
+        .then(() => console.log(`[Frontend] Audio en reproducción: ${audioUrl}`))
         .catch((error) => {
-          console.error(`[Speech] Playback failed for ${playableUrl}`, error);
+          console.error(`[Frontend] Falló la reproducción para ${audioUrl}`, error);
           onMessagePlayed();
         });
     } else {
-      console.log(`[Speech] Playback started for ${playableUrl}`);
+      console.log(`[Frontend] Audio en reproducción: ${audioUrl}`);
     }
 
     setCurrentAudio(audio);
 
     return () => {
-      console.log(`[Speech] Cleaning up audio for ${playableUrl}`);
+      console.log(`[Frontend] Limpieza de audio para ${audioUrl}`);
       audio.removeEventListener("ended", handleEnded);
       audio.removeEventListener("error", handleError);
       audio.pause();

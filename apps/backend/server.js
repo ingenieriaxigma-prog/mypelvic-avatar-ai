@@ -2,7 +2,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import path from "path";
-import { ensureAudioDirectory, AUDIO_DIRECTORY, AUDIO_PUBLIC_ROUTE } from "./utils/files.mjs";
+import { fileURLToPath } from "url";
+import { ensureAudioDirectory, AUDIO_PUBLIC_ROUTE } from "./utils/files.mjs";
 import { openAIChain, parser } from "./modules/openAI.mjs";
 import { lipSync } from "./modules/lip-sync.mjs";
 import { sendDefaultMessages, defaultResponse } from "./modules/defaultMessages.mjs";
@@ -12,6 +13,9 @@ import * as voice from "./modules/voice.mjs";
 
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const elevenLabsApiKey = process.env.ELEVEN_LABS_API_KEY;
 
 const app = express();
@@ -20,7 +24,7 @@ app.use(cors());
 const port = 3000;
 
 const resolveHostUrl = (req) => {
-  const publicUrl = process.env.PUBLIC_BACKEND_URL;
+  const publicUrl = process.env.HOST_URL || process.env.PUBLIC_BACKEND_URL;
   if (publicUrl) {
     return publicUrl.replace(/\/$/, "");
   }
@@ -31,28 +35,23 @@ const resolveHostUrl = (req) => {
   return `${req.protocol}://${host}`;
 };
 
-const logStaticRequest = (req, _res, next) => {
-  console.log(`[Audio] Static request: ${req.method} ${req.originalUrl}`);
-  next();
-};
-
 const audioStaticOptions = {
-  setHeaders: (res, filePath) => {
+  setHeaders: (res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
-    const ext = path.extname(filePath).toLowerCase();
-    if (ext === ".mp3") {
-      res.type("audio/mpeg");
-    } else if (ext === ".wav") {
-      res.type("audio/wav");
-    }
+    res.setHeader("Content-Type", "audio/mpeg");
   },
 };
 
-ensureAudioDirectory().catch((error) => {
-  console.error("[Audio] Failed to prepare audio directory:", error);
-});
-app.use(AUDIO_PUBLIC_ROUTE, logStaticRequest);
-app.use(AUDIO_PUBLIC_ROUTE, express.static(AUDIO_DIRECTORY, audioStaticOptions));
+ensureAudioDirectory()
+  .then(() => {
+    console.log(`[Audio] Directory ready at ${path.join(__dirname, "public/audios")}`);
+  })
+  .catch((error) => {
+    console.error("[Audio] Failed to prepare audio directory:", error);
+  });
+const staticAudioPath = path.join(__dirname, "public/audios");
+console.log(`[Audio] Serving static files from ${staticAudioPath}`);
+app.use(AUDIO_PUBLIC_ROUTE, express.static(staticAudioPath, audioStaticOptions));
 
 app.get("/voices", async (req, res) => {
   res.send(await voice.getVoices(elevenLabsApiKey));
