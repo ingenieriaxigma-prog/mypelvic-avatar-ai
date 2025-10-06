@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 const backendUrl = "http://localhost:3000";
 
@@ -10,12 +10,6 @@ export const SpeechProvider = ({ children }) => {
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState();
   const [loading, setLoading] = useState(false);
-  const [currentAudio, setCurrentAudio] = useState(null);
-  const [voiceStatus, setVoiceStatus] = useState("idle");
-  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
-  const [playbackError, setPlaybackError] = useState(null);
-
-  const blockedAudioRef = useRef(null);
 
   let chunks = [];
 
@@ -42,18 +36,9 @@ export const SpeechProvider = ({ children }) => {
           body: JSON.stringify({ audio: base64Audio }),
         });
         const response = (await data.json()).messages;
-        console.log("[Frontend] Respuesta STS recibida:", response);
-        if (!Array.isArray(response) || response.length === 0) {
-          console.warn("[Frontend] Respuesta vacía desde STS.");
-        }
-        response?.forEach((msg, index) => {
-          if (!msg?.audioUrl) {
-            console.warn(`[Frontend] Falta audioUrl en STS (índice ${index}).`, msg);
-          }
-        });
-        setMessages((messages) => [...messages, ...(response || [])]);
+        setMessages((messages) => [...messages, ...response]);
       } catch (error) {
-        console.error("[Frontend] Error al enviar STS:", error);
+        console.error(error);
       } finally {
         setLoading(false);
       }
@@ -108,31 +93,17 @@ export const SpeechProvider = ({ children }) => {
         body: JSON.stringify({ message }),
       });
       const response = (await data.json()).messages;
-      console.log("[Frontend] Respuesta TTS recibida:", response);
-      if (!Array.isArray(response) || response.length === 0) {
-        console.warn("[Frontend] Respuesta vacía desde TTS.");
-      }
-      response?.forEach((msg, index) => {
-        if (!msg?.audioUrl) {
-          console.warn(`[Frontend] Falta audioUrl en TTS (índice ${index}).`, msg);
-        }
-      });
-      setMessages((messages) => [...messages, ...(response || [])]);
+      setMessages((messages) => [...messages, ...response]);
     } catch (error) {
-      console.error("[Frontend] Error al enviar TTS:", error);
+      console.error(error);
     } finally {
       setLoading(false);
     }
   };
 
-  const onMessagePlayed = useCallback(() => {
+  const onMessagePlayed = () => {
     setMessages((messages) => messages.slice(1));
-    setCurrentAudio(null);
-    setVoiceStatus("idle");
-    setAutoplayBlocked(false);
-    setPlaybackError(null);
-    blockedAudioRef.current = null;
-  }, []);
+  };
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -141,101 +112,6 @@ export const SpeechProvider = ({ children }) => {
       setMessage(null);
     }
   }, [messages]);
-
-  useEffect(() => {
-    if (!message) {
-      setCurrentAudio(null);
-      setVoiceStatus("idle");
-      setAutoplayBlocked(false);
-      setPlaybackError(null);
-      return;
-    }
-
-    const { audioUrl } = message;
-
-    if (!audioUrl) {
-      console.warn("[Frontend] No se proporcionó audioUrl reproducible.", message);
-      onMessagePlayed();
-      return;
-    }
-
-    console.log("🎧 Playing audio:", audioUrl);
-    setVoiceStatus("loading");
-    setAutoplayBlocked(false);
-    setPlaybackError(null);
-
-    const audio = new Audio(audioUrl);
-    audio.crossOrigin = "anonymous";
-    audio.autoplay = true;
-
-    const handleEnded = () => {
-      console.log(`[Frontend] Reproducción finalizada para ${audioUrl}`);
-      onMessagePlayed();
-    };
-
-    const handleError = (event) => {
-      console.error(`[Frontend] Error de reproducción para ${audioUrl}`, event);
-      onMessagePlayed();
-    };
-
-    audio.addEventListener("ended", handleEnded);
-    audio.addEventListener("error", handleError);
-
-    const startPlayback = async () => {
-      try {
-        await audio.play();
-        console.log("✅ Playback started");
-        setVoiceStatus("playing");
-        setAutoplayBlocked(false);
-        blockedAudioRef.current = null;
-      } catch (error) {
-        console.error("⚠️ Playback error:", error);
-        setVoiceStatus("error");
-        setPlaybackError(error);
-        const isAutoplayBlock =
-          error?.name === "NotAllowedError" || error?.message?.toLowerCase().includes("gesture");
-        if (isAutoplayBlock) {
-          setAutoplayBlocked(true);
-          blockedAudioRef.current = audio;
-        } else {
-          onMessagePlayed();
-        }
-      }
-    };
-
-    startPlayback();
-
-    setCurrentAudio(audio);
-
-    return () => {
-      console.log(`[Frontend] Limpieza de audio para ${audioUrl}`);
-      audio.removeEventListener("ended", handleEnded);
-      audio.removeEventListener("error", handleError);
-      audio.pause();
-      if (blockedAudioRef.current === audio) {
-        blockedAudioRef.current = null;
-      }
-    };
-  }, [message, onMessagePlayed]);
-
-  const resumePlayback = useCallback(async () => {
-    const audio = blockedAudioRef.current;
-    if (!audio) {
-      return;
-    }
-    try {
-      console.log("[Frontend] Reintentando reproducción manual");
-      await audio.play();
-      console.log("✅ Playback started");
-      setVoiceStatus("playing");
-      setAutoplayBlocked(false);
-      setPlaybackError(null);
-      blockedAudioRef.current = null;
-    } catch (error) {
-      console.error("⚠️ Playback error:", error);
-      setPlaybackError(error);
-    }
-  }, []);
 
   return (
     <SpeechContext.Provider
@@ -247,11 +123,6 @@ export const SpeechProvider = ({ children }) => {
         message,
         onMessagePlayed,
         loading,
-        currentAudio,
-        voiceStatus,
-        autoplayBlocked,
-        playbackError,
-        resumePlayback,
       }}
     >
       {children}
