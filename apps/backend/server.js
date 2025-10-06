@@ -1,6 +1,8 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import path from "path";
+import { ensureAudioDirectory, AUDIO_DIRECTORY, AUDIO_PUBLIC_ROUTE } from "./utils/files.mjs";
 import { openAIChain, parser } from "./modules/openAI.mjs";
 import { lipSync } from "./modules/lip-sync.mjs";
 import { sendDefaultMessages, defaultResponse } from "./modules/defaultMessages.mjs";
@@ -17,13 +19,49 @@ app.use(express.json());
 app.use(cors());
 const port = 3000;
 
+const resolveHostUrl = (req) => {
+  const publicUrl = process.env.PUBLIC_BACKEND_URL;
+  if (publicUrl) {
+    return publicUrl.replace(/\/$/, "");
+  }
+  const host = req.get("host");
+  if (!host) {
+    return `http://localhost:${port}`;
+  }
+  return `${req.protocol}://${host}`;
+};
+
+const logStaticRequest = (req, _res, next) => {
+  console.log(`[Audio] Static request: ${req.method} ${req.originalUrl}`);
+  next();
+};
+
+const audioStaticOptions = {
+  setHeaders: (res, filePath) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === ".mp3") {
+      res.type("audio/mpeg");
+    } else if (ext === ".wav") {
+      res.type("audio/wav");
+    }
+  },
+};
+
+ensureAudioDirectory().catch((error) => {
+  console.error("[Audio] Failed to prepare audio directory:", error);
+});
+app.use(AUDIO_PUBLIC_ROUTE, logStaticRequest);
+app.use(AUDIO_PUBLIC_ROUTE, express.static(AUDIO_DIRECTORY, audioStaticOptions));
+
 app.get("/voices", async (req, res) => {
   res.send(await voice.getVoices(elevenLabsApiKey));
 });
 
 app.post("/tts", async (req, res) => {
+  const hostUrl = resolveHostUrl(req);
   const userMessage = await req.body.message;
-  const defaultMessages = await sendDefaultMessages({ userMessage });
+  const defaultMessages = await sendDefaultMessages({ userMessage, hostUrl });
   if (defaultMessages) {
     res.send({ messages: defaultMessages });
     return;
@@ -37,11 +75,12 @@ app.post("/tts", async (req, res) => {
   } catch (error) {
     openAImessages = defaultResponse;
   }
-  openAImessages = await lipSync({ messages: openAImessages.messages });
+  openAImessages = await lipSync({ messages: openAImessages.messages, hostUrl });
   res.send({ messages: openAImessages });
 });
 
 app.post("/sts", async (req, res) => {
+  const hostUrl = resolveHostUrl(req);
   const base64Audio = req.body.audio;
   const audioData = Buffer.from(base64Audio, "base64");
   const userMessage = await convertAudioToText({ audioData });
@@ -54,7 +93,7 @@ app.post("/sts", async (req, res) => {
   } catch (error) {
     openAImessages = defaultResponse;
   }
-  openAImessages = await lipSync({ messages: openAImessages.messages });
+  openAImessages = await lipSync({ messages: openAImessages.messages, hostUrl });
   res.send({ messages: openAImessages });
 });
 app.get("/test", async (req, res) => {
