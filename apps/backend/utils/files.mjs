@@ -14,7 +14,7 @@ const execCommand = ({ command }) => {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const AUDIO_DIRECTORY = path.resolve(__dirname, "../audios");
+const AUDIO_DIRECTORY = path.resolve(__dirname, "../public/audios");
 const AUDIO_PUBLIC_ROUTE = "/audios";
 
 const ensureAudioDirectory = async () => {
